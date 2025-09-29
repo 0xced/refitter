@@ -1,4 +1,5 @@
 using System.Reflection;
+using Fluid.Values;
 using NJsonSchema.CodeGeneration;
 using NJsonSchema.CodeGeneration.CSharp;
 using NSwag;
@@ -106,6 +107,7 @@ internal class CSharpClientGeneratorFactory(RefitGeneratorSettings settings, Ope
         public CustomTemplateFactory(CodeGeneratorSettingsBase settings)
             : base(settings, [typeof(CSharpGenerator).Assembly, typeof(CSharpGeneratorBaseSettings).Assembly])
         {
+            TemplateOptions.Filters.AddFilter("rtrimquestionmark", (input, _, _) => new ValueTask<FluidValue>(new StringValue(input.ToStringValue().TrimEnd('?'), encode: false)));
         }
 
         /// <inheritdoc />
@@ -116,8 +118,14 @@ internal class CSharpClientGeneratorFactory(RefitGeneratorSettings settings, Ope
             {
                 "Class" => templateText
                     .Replace(
+                        "[System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]",
+                        "[System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<{{ property.Type | rtrimquestionmark }}>))]")
+                    .Replace(
                         "[System.Text.Json.Serialization.JsonPolymorphic(TypeDiscriminatorPropertyName = \"{{ Discriminator }}\")]",
                         "[System.Text.Json.Serialization.JsonPolymorphic(TypeDiscriminatorPropertyName = \"{{ Discriminator }}\", UnknownDerivedTypeHandling = System.Text.Json.Serialization.JsonUnknownDerivedTypeHandling.FallBackToBaseType, IgnoreUnrecognizedTypeDiscriminators = true)]"),
+                "Enum" => templateText.Replace(
+                    "[System.Runtime.Serialization.EnumMember(Value = @\"{{ enum.Value | replace: '\"', '\"\"' }}\")]",
+                    "[System.Text.Json.Serialization.JsonStringEnumMemberName(@\"{{ enum.Value | replace: '\"', '\"\"' }}\")]"),
                 _ => templateText,
             };
         }
